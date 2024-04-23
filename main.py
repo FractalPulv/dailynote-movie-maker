@@ -10,6 +10,12 @@ from scripts.text_extractor import extract_text, extract_front_matter
 
 ssl._create_default_https_context = ssl._create_stdlib_context
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DIR_PATH = os.getenv('DIR_PATH')
+
 # Function to handle file selection
 def load_selected_file(event):
     selection_index = file_listbox.curselection()
@@ -67,20 +73,20 @@ window.title("Video Generator")
 window.geometry("600x400")
 
 # Specify the directory path
-directory_path = "/Users/lucapulvirenti/Library/Mobile Documents/iCloud~md~obsidian/Documents/Pulvirenti Archive/daily/2024/"
+directory_path = DIR_PATH
 
 # Label for file list
 file_label = Label(window, text="Select a file:")
 file_label.pack()
 
 # Create listbox widget to display files
-file_listbox = Listbox(window, width=60)
-file_listbox.pack()
+file_listbox = Listbox(window, width=15, height=100)  # Increase the height of the listbox
+file_listbox.pack(side="left")
 
 # Add scrollbar to the listbox
 scrollbar = Scrollbar(window, orient="vertical")
 scrollbar.config(command=file_listbox.yview)
-scrollbar.pack(side="right", fill="y")
+scrollbar.pack(side="left", fill="y")
 
 file_listbox.config(yscrollcommand=scrollbar.set)
 
