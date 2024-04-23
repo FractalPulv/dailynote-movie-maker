@@ -1,72 +1,107 @@
-import re
 import os
-from tkinter import Tk, filedialog
+import re
+import ssl
+from tkinter import Tk, filedialog, Listbox, Scrollbar, Button, Label, Text
 from moviepy.editor import TextClip, CompositeVideoClip, AudioFileClip, concatenate_videoclips
 from pytube import YouTube
-import ssl
-
 from scripts.audio_downloader import download_audio_from_youtube
 from scripts.video_generator import generate_video
 from scripts.text_extractor import extract_text, extract_front_matter
 
-
 ssl._create_default_https_context = ssl._create_stdlib_context
 
+# Function to handle file selection
+def load_selected_file(event):
+    selection_index = file_listbox.curselection()
+    if selection_index:
+        file_name = file_listbox.get(selection_index)
+        file_path = os.path.join(directory_path, file_name)
+        load_content(file_path)
 
-# Import any other necessary libraries for audio extraction (e.g., pytube)
+# Function to load content from selected file
+def load_content(file_path):
+    with open(file_path, 'r') as file:
+        note_content = file.read()
+        front_matter = extract_front_matter(note_content)
+        front_matter_text.config(state='normal')
+        front_matter_text.delete('1.0', 'end')
+        front_matter_text.insert('1.0', front_matter)
+        front_matter_text.config(state='disabled')
+        generate_button.config(state='normal')
+        global selected_file_path
+        selected_file_path = file_path
 
+# Function to generate the video
+def generate_video_from_selected_file():
 
+    template_path = './template_daily.md'
+    with open(template_path, 'r') as template_file:
+        template_content = template_file.read()
+        match = re.search(r'```(.*?)```', template_content, re.DOTALL)
+        if match:
+            dataview = match.group(1)
+        else:
+            dataview = ''
 
+    with open(selected_file_path, 'r') as file:
+        note_content = file.read()
+        front_matter = extract_front_matter(note_content)
+        after_dataview_match = re.search(re.escape(dataview) + r'(.*)', note_content, re.DOTALL)
+        if after_dataview_match:
+            note_content = after_dataview_match.group(1)
+        text_content = extract_text(note_content)
+        youtube_match = re.search(r'<iframe.*?src="(.*?)".*?>', text_content)
+        if youtube_match:
+            youtube_url = youtube_match.group(1)
+            audio = download_audio_from_youtube(youtube_url)
+            if audio:
+                generate_video(text_content, front_matter, audio)
+            else:
+                print("Failed to download audio from YouTube.")
+        else:
+            print("No YouTube video found.")
 
-# Read the content of the template file to extract the dataview
-template_path = './template_daily.md'
-with open(template_path, 'r') as template_file:
-    template_content = template_file.read()
-    match = re.search(r'```(.*?)```', template_content, re.DOTALL)
-    if match:
-        dataview = match.group(1)
-    else:
-        dataview = ''
+# Initialize tkinter window
+window = Tk()
+window.title("Video Generator")
+window.geometry("600x400")
 
-# Prompt the user to select a file
-root = Tk()
-root.withdraw()
-file_path = filedialog.askopenfilename()
+# Specify the directory path
+directory_path = "/Users/lucapulvirenti/Library/Mobile Documents/iCloud~md~obsidian/Documents/Pulvirenti Archive/daily/2024/"
 
-# Read the content of the selected file
-with open(file_path, 'r') as file:
-    note_content = file.read()
+# Label for file list
+file_label = Label(window, text="Select a file:")
+file_label.pack()
 
-front_matter = extract_front_matter(note_content)
+# Create listbox widget to display files
+file_listbox = Listbox(window, width=60)
+file_listbox.pack()
 
+# Add scrollbar to the listbox
+scrollbar = Scrollbar(window, orient="vertical")
+scrollbar.config(command=file_listbox.yview)
+scrollbar.pack(side="right", fill="y")
 
-# Extract the text after the template dataview match
-after_dataview_match = re.search(re.escape(dataview) + r'(.*)', note_content, re.DOTALL)
-if after_dataview_match:
-    note_content = after_dataview_match.group(1)
+file_listbox.config(yscrollcommand=scrollbar.set)
 
-# Extract text content from the note
-text_content = extract_text(note_content)
-print("=== Text Content ===")
-print(text_content)
-print("====================")
+# Add files to the listbox
+for file_name in sorted(os.listdir(directory_path)):
+    if file_name.endswith(".md"):
+        file_listbox.insert("end", file_name)
 
-# Check if there's a YouTube video embedded in the text
-youtube_match = re.search(r'<iframe.*?src="(.*?)".*?>', text_content)
-if youtube_match:
-    youtube_url = youtube_match.group(1)
-    print("YouTube video found:", youtube_url)
-    # Download audio from the YouTube video
-    audio = download_audio_from_youtube(youtube_url)
-    # Once you have the audio, you can proceed to generate the video with the text content and audio.
-else:
-    print("No YouTube video found.")
+# Bind event to load selected file
+file_listbox.bind("<<ListboxSelect>>", load_selected_file)
 
-# Generate a video with the extracted text content and audio
-if audio:
-    generate_video(text_content, front_matter, audio)
-else:
-    generate_video(text_content, front_matter)
+# Label for front matter
+front_matter_label = Label(window, text="Front Matter:")
+front_matter_label.pack()
 
+# Text widget to display front matter
+front_matter_text = Text(window, height=10, width=60, wrap='word', state='disabled')
+front_matter_text.pack()
 
-# 2024-04-05
+# Button to generate video
+generate_button = Button(window, text="Generate Video", command=generate_video_from_selected_file, state='disabled')
+generate_button.pack()
+
+window.mainloop()
